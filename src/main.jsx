@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { ArrowRight, LockKeyhole, Send, Search, Radio, Target, Users, BarChart3, MessageSquare, ScanSearch, Lightbulb, FileText, Handshake, Database } from 'lucide-react';
 import './styles.css';
 
+const INTELLIGENCE_ENDPOINT = 'https://alagbara-intelligence.vercel.app/api/intelligence-request';
+
 const pulses = [
   { type: 'CAPITAL MARKETS', title: 'Dangote IPO', text: 'A live capital-market event is generating new participation, access and intelligence questions.', age: 'LIVE' },
   { type: 'TRADE', title: 'Benin–Nigeria trade flows', text: 'Cross-border signals can reveal openings for manufacturers, distributors and service providers.', age: 'TODAY' },
@@ -21,10 +23,40 @@ const steps = [
 
 function App() {
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
   const [form, setForm] = useState({ question: '', market: '', decision: '', useful: '' });
 
   const update = (key) => (e) => setForm((current) => ({ ...current, [key]: e.target.value }));
-  const submit = (e) => { e.preventDefault(); if (form.question.trim()) setSent(true); };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.question.trim() || submitting) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await fetch(INTELLIGENCE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Intelligence request failed');
+      setResult(data);
+      setSent(true);
+    } catch (err) {
+      setError(err.message || 'Could not reach the BIG Intelligence Desk.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const reset = () => {
+    setSent(false);
+    setResult(null);
+    setError('');
+  };
 
   return (
     <main>
@@ -53,9 +85,23 @@ function App() {
             <label>Market / company / sector<input value={form.market} onChange={update('market')} placeholder="e.g. Nigeria, Dangote, HORECA, Pharmaceuticals..." /></label>
             <label>What decision or opportunity is involved?<input value={form.decision} onChange={update('decision')} placeholder="e.g. should we enter, can we participate, where are the opportunities..." /></label>
             <label>What would make this intelligence useful to you?<input value={form.useful} onChange={update('useful')} placeholder="e.g. market map, partner list, risk analysis, next steps..." /></label>
-            <button className="submit" type="submit"><Send size={17}/> SEND INTELLIGENCE REQUEST</button>
+            {error && <div className="privacy" role="alert">{error}</div>}
+            <button className="submit" type="submit" disabled={submitting}><Send size={17}/>{submitting ? 'PROCESSING INTELLIGENCE…' : 'SEND INTELLIGENCE REQUEST'}</button>
             <div className="privacy"><LockKeyhole size={14}/> Your information is confidential. We use it to deliver relevant intelligence.</div>
-          </> : <div className="received"><div className="received-icon"><Send size={23}/></div><h2>REQUEST RECEIVED</h2><p>Your question has entered the BIG Intelligence Desk.</p><div className="pipeline"><span>SCOUT</span><ArrowRight/><span>PULSE</span><ArrowRight/><span>ANA</span></div><p className="muted">BIG will determine the appropriate intelligence engagement and next step.</p><button className="ghost dark" type="button" onClick={() => setSent(false)}>Submit another question</button></div>}
+          </> : <div className="received">
+            <div className="received-icon"><Send size={23}/></div>
+            <h2>REQUEST RECEIVED</h2>
+            <p>Your question entered the BIG Intelligence Desk and was processed by ALAGBARA.</p>
+            <div className="pipeline"><span>SCOUT</span><ArrowRight/><span>PULSE</span><ArrowRight/><span>ANA</span></div>
+            {result?.intelligence && <div className="intelligence-result">
+              <div className="result-label">PULSE</div><p>{result.intelligence.pulse}</p>
+              <div className="result-label">ANALYSIS</div><p>{result.intelligence.analysis}</p>
+              <div className="result-label">NEXT STEP</div><p>{result.intelligence.recommendation}</p>
+              <div className="result-meta">Confidence: {result.intelligence.confidence} · Request: {result.request_id}</div>
+            </div>}
+            <p className="muted">The request is persisted in the BIG Intelligence Desk for subsequent engagement and memory.</p>
+            <button className="ghost dark" type="button" onClick={reset}>Submit another question</button>
+          </div>}
         </form>
       </section>
 
